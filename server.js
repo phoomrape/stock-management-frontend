@@ -7,8 +7,19 @@ const PORT = 5001;
 const MONGO_URI = 'mongodb://localhost:27017/stock_store';
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: ['http://localhost:8081', 'http://localhost:19006'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
 app.use(express.json());
+
+// Log all requests
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.url} - ${new Date().toISOString()}`);
+  next();
+});
 
 // MongoDB Connection
 mongoose.connect(MONGO_URI)
@@ -34,9 +45,52 @@ const categorySchema = new mongoose.Schema({
   timestamps: true
 });
 
+// เพิ่ม virtual field สำหรับ id
+categorySchema.virtual('id').get(function() {
+  return this._id.toHexString();
+});
+
+// ตั้งค่าให้ส่ง virtual fields ในการแปลงเป็น JSON
+categorySchema.set('toJSON', {
+  virtuals: true
+});
+
 const Category = mongoose.model('Category', categorySchema);
 
 // Routes
+
+// Route สำหรับเพิ่มข้อมูลตัวอย่าง (ต้องมาก่อน /:id)
+app.post('/api/categories/seed', async (req, res) => {
+  try {
+    const sampleCategories = [
+      {
+        name: "เสื้อผ้า",
+        description: "สินค้าเกี่ยวกับเครื่องแต่งกาย"
+      },
+      {
+        name: "อิเล็กทรอนิกส์",
+        description: "สินค้าเครื่องใช้ไฟฟ้าและอุปกรณ์อิเล็กทรอนิกส์"
+      },
+      {
+        name: "เครื่องดื่ม",
+        description: "น้ำดื่มและเครื่องดื่มต่างๆ"
+      }
+    ];
+
+    // ลบข้อมูลเก่าออกก่อน (ถ้ามี)
+    await Category.deleteMany({});
+    
+    // เพิ่มข้อมูลตัวอย่าง
+    const createdCategories = await Category.insertMany(sampleCategories);
+    
+    res.status(201).json({
+      message: 'เพิ่มข้อมูลตัวอย่างเรียบร้อยแล้ว',
+      categories: createdCategories
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'เกิดข้อผิดพลาดในการเพิ่มข้อมูลตัวอย่าง', error: error.message });
+  }
+});
 
 // GET - ดึงข้อมูลหมวดหมู่ทั้งหมด
 app.get('/api/categories', async (req, res) => {
@@ -118,48 +172,47 @@ app.put('/api/categories/:id', async (req, res) => {
 // DELETE - ลบหมวดหมู่
 app.delete('/api/categories/:id', async (req, res) => {
   try {
-    const deletedCategory = await Category.findByIdAndDelete(req.params.id);
+    const categoryId = req.params.id;
     
-    if (!deletedCategory) {
-      return res.status(404).json({ message: 'ไม่พบหมวดหมู่ที่ต้องการลบ' });
+    // ค้นหาหมวดหมู่ก่อนลบ
+    const categoryToDelete = await Category.findOne({ _id: categoryId });
+    
+    if (!categoryToDelete) {
+      return res.status(404).json({ 
+        message: 'ไม่พบหมวดหมู่ที่ต้องการลบ',
+        success: false,
+        id: categoryId
+      });
     }
 
-    res.json({ message: 'ลบหมวดหมู่เรียบร้อยแล้ว', deletedCategory });
+    // ลบหมวดหมู่โดยใช้ deleteOne
+    const deleteResult = await Category.deleteOne({ _id: categoryId });
+    
+    if (deleteResult.deletedCount === 1) {
+      res.json({ 
+        message: 'ลบหมวดหมู่เรียบร้อยแล้ว', 
+        success: true,
+        deletedCategory: {
+          id: categoryToDelete._id,
+          name: categoryToDelete.name,
+          description: categoryToDelete.description
+        }
+      });
+    } else {
+      res.status(500).json({ 
+        message: 'เกิดข้อผิดพลาดในการลบหมวดหมู่',
+        success: false,
+        deleteResult: deleteResult
+      });
+    }
   } catch (error) {
-    res.status(500).json({ message: 'เกิดข้อผิดพลาดในการลบหมวดหมู่', error: error.message });
-  }
-});
-
-// Route สำหรับเพิ่มข้อมูลตัวอย่าง
-app.post('/api/categories/seed', async (req, res) => {
-  try {
-    const sampleCategories = [
-      {
-        name: "เสื้อผ้า",
-        description: "สินค้าเกี่ยวกับเครื่องแต่งกาย"
-      },
-      {
-        name: "อิเล็กทรอนิกส์",
-        description: "สินค้าเครื่องใช้ไฟฟ้าและอุปกรณ์อิเล็กทรอนิกส์"
-      },
-      {
-        name: "เครื่องดื่ม",
-        description: "น้ำดื่มและเครื่องดื่มต่างๆ"
-      }
-    ];
-
-    // ลบข้อมูลเก่าออกก่อน (ถ้ามี)
-    await Category.deleteMany({});
-    
-    // เพิ่มข้อมูลตัวอย่าง
-    const createdCategories = await Category.insertMany(sampleCategories);
-    
-    res.status(201).json({
-      message: 'เพิ่มข้อมูลตัวอย่างเรียบร้อยแล้ว',
-      categories: createdCategories
+    console.error('Error deleting category:', error);
+    res.status(500).json({ 
+      message: 'เกิดข้อผิดพลาดในการลบหมวดหมู่', 
+      success: false,
+      error: error.message,
+      id: req.params.id
     });
-  } catch (error) {
-    res.status(500).json({ message: 'เกิดข้อผิดพลาดในการเพิ่มข้อมูลตัวอย่าง', error: error.message });
   }
 });
 
@@ -173,7 +226,8 @@ app.get('/', (req, res) => {
       'POST /api/categories': 'เพิ่มหมวดหมู่ใหม่',
       'PUT /api/categories/:id': 'อัปเดตหมวดหมู่',
       'DELETE /api/categories/:id': 'ลบหมวดหมู่',
-      'POST /api/categories/seed': 'เพิ่มข้อมูลตัวอย่าง'
+      'POST /api/categories/seed': 'เพิ่มข้อมูลตัวอย่าง',
+      'GET /api/categories/test-delete/:id': 'ทดสอบลบหมวดหมู่ด้วย GET'
     }
   });
 });
