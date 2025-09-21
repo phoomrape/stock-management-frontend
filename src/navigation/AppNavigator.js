@@ -1,103 +1,131 @@
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
-import { createStackNavigator } from '@react-navigation/stack';
-import { Platform } from 'react-native';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../contexts/AuthContext';
 
 // Import screens
-import HomeScreen from '../screens/HomeScreen';
+import DashboardScreen from '../screens/DashboardScreen';
 import CategoriesScreen from '../screens/CategoriesScreen';
-import AddCategoryScreen from '../screens/AddCategoryScreen';
-import UpdateCategoryScreen from '../screens/UpdateCategoryScreen';
-import DeleteCategoryScreen from '../screens/DeleteCategoryScreen';
+import ProductsScreen from '../screens/ProductsScreen';
+import ReportsScreen from '../screens/ReportsScreen';
 
-const Stack = createStackNavigator();
+const Tab = createBottomTabNavigator();
+
+// ฟังก์ชันสำหรับแสดงไอคอนของแต่ละ tab
+const getTabBarIcon = (routeName, focused, color, size) => {
+  let iconName;
+  
+  switch (routeName) {
+    case 'Dashboard':
+      iconName = focused ? 'home' : 'home-outline';
+      break;
+    case 'Products':
+      iconName = focused ? 'cube' : 'cube-outline';
+      break;
+    case 'Categories':
+      iconName = focused ? 'list' : 'list-outline';
+      break;
+    case 'Reports':
+      iconName = focused ? 'bar-chart' : 'bar-chart-outline';
+      break;
+    default:
+      iconName = 'help-circle-outline';
+  }
+  
+  return <Ionicons name={iconName} size={size || 24} color={color || '#666'} />;
+};
 
 const AppNavigator = () => {
-  const screenOptions = {
-    headerStyle: {
-      backgroundColor: '#4F46E5',
-    },
-    headerTintColor: '#fff',
-    headerTitleStyle: {
-      fontWeight: 'bold',
-    },
-    headerBackTitleVisible: false, // ซ่อนข้อความย้อนกลับ
-    // ปรับการตั้กค่าเพื่อลด aria-hidden issue
-    animationEnabled: true,
-    gestureEnabled: true,
-    presentation: 'card', // ใช้ card แทน modal
-    // เพิ่มการตั้งค่า accessibility ที่ดีกว่า
-    headerAccessibilityLabel: 'หัวข้อหน้า',
-    // แก้ไข accessibility สำหรับ web
-    ...(Platform.OS === 'web' && {
-      cardStyle: { backgroundColor: 'transparent' },
-      cardOverlayEnabled: false,
-    }),
+  const { logout } = useAuth();
+
+  const handleLogout = async () => {
+    console.log('🚪 Direct logout - starting...');
+    try {
+      await logout();
+      console.log('✅ Logout successful!');
+    } catch (error) {
+      console.error('❌ Logout error:', error);
+    }
   };
 
   return (
-    <NavigationContainer
-      // เพิ่ม linking configuration สำหรับ web
-      linking={Platform.OS === 'web' ? {
-        prefixes: ['http://localhost:8081'],
-        config: {
-          screens: {
-            Home: '/',
-            Categories: '/categories',
-            AddCategory: '/add-category',
-            UpdateCategory: '/update-category',
-            DeleteCategory: '/delete-category',
-          },
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        headerShown: true,
+        headerStyle: {
+          backgroundColor: '#007AFF',
         },
-      } : undefined}
-      // ลบ screenOptions ที่อาจทำให้เกิด aria-hidden conflict
+        headerTintColor: 'white',
+        headerTitleStyle: {
+          fontWeight: 'bold',
+        },
+        tabBarActiveTintColor: '#007AFF',
+        tabBarInactiveTintColor: 'gray',
+        tabBarStyle: {
+          paddingBottom: 5,
+          paddingTop: 5,
+          height: 60,
+        },
+      })}
     >
-      <Stack.Navigator
-        initialRouteName="Home"
-        screenOptions={screenOptions}
-      >
-        <Stack.Screen 
-          name="Home" 
-          component={HomeScreen} 
-          options={{ 
-            title: 'หน้าหลัก',
-            headerLeft: () => null, // ไม่แสดงปุ่มย้อนกลับในหน้าหลัก
-          }}
-        />
-        <Stack.Screen 
-          name="Categories" 
-          component={CategoriesScreen} 
-          options={{ 
-            title: 'หมวดหมู่สินค้า',
-            headerBackTitleVisible: false,
-          }}
-        />
-        <Stack.Screen 
-          name="AddCategory" 
-          component={AddCategoryScreen} 
-          options={{ 
-            title: 'เพิ่มหมวดหมู่',
-            headerBackTitleVisible: false,
-          }}
-        />
-        <Stack.Screen 
-          name="UpdateCategory" 
-          component={UpdateCategoryScreen} 
-          options={{ 
-            title: 'แก้ไขหมวดหมู่',
-            headerBackTitleVisible: false,
-          }}
-        />
-        <Stack.Screen 
-          name="DeleteCategory" 
-          component={DeleteCategoryScreen} 
-          options={{ 
-            title: 'ลบหมวดหมู่',
-            headerBackTitleVisible: false,
-          }}
-        />
-      </Stack.Navigator>
-    </NavigationContainer>
+      <Tab.Screen
+        name="Dashboard"
+        component={DashboardScreen}
+        options={{
+          tabBarLabel: 'หน้าหลัก',
+          headerTitle: 'หน้าหลัก',
+          tabBarIcon: ({ focused, color, size }) => getTabBarIcon('Dashboard', focused, color, size),
+          headerRight: () => (
+            <TouchableOpacity onPress={handleLogout} style={{ marginRight: 15 }}>
+              <Ionicons name="log-out-outline" size={24} color="white" />
+            </TouchableOpacity>
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Products"
+        component={ProductsScreen}
+        options={{
+          tabBarLabel: 'สินค้า',
+          headerTitle: 'จัดการสินค้า',
+          tabBarIcon: ({ focused, color, size }) => getTabBarIcon('Products', focused, color, size),
+          headerRight: () => (
+            <TouchableOpacity onPress={handleLogout} style={{ marginRight: 15 }}>
+              <Ionicons name="log-out-outline" size={24} color="white" />
+            </TouchableOpacity>
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Categories"
+        component={CategoriesScreen}
+        options={{
+          tabBarLabel: 'หมวดหมู่',
+          headerTitle: 'จัดการหมวดหมู่',
+          tabBarIcon: ({ focused, color, size }) => getTabBarIcon('Categories', focused, color, size),
+          headerRight: () => (
+            <TouchableOpacity onPress={handleLogout} style={{ marginRight: 15 }}>
+              <Ionicons name="log-out-outline" size={24} color="white" />
+            </TouchableOpacity>
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Reports"
+        component={ReportsScreen}
+        options={{
+          tabBarLabel: 'รายงาน',
+          headerTitle: 'รายงานระบบ',
+          tabBarIcon: ({ focused, color, size }) => getTabBarIcon('Reports', focused, color, size),
+          headerRight: () => (
+            <TouchableOpacity onPress={handleLogout} style={{ marginRight: 15 }}>
+              <Ionicons name="log-out-outline" size={24} color="white" />
+            </TouchableOpacity>
+          ),
+        }}
+      />
+    </Tab.Navigator>
   );
 };
 
